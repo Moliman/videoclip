@@ -22,6 +22,7 @@ local config = {
     audio_bitrate = '32k',
     mute_audio = false,
     font_size = 24,
+    total_time_to_clipbaord = true
 }
 
 mpopt.read_options(config, 'videoclip')
@@ -70,7 +71,7 @@ local function human_readable_time(seconds)
     parts.s = math.floor(seconds % 60)
     parts.ms = math.floor((seconds * 1000) % 1000)
 
-    local ret = string.format("%02dm%02ds%03dms", parts.m, parts.s, parts.ms)
+    local ret = string.format("%02d:%02d.%03d", parts.m, parts.s, parts.ms)
 
     if parts.h > 0 then
         ret = string.format('%dh%s', parts.h, ret)
@@ -290,9 +291,12 @@ main_menu = Menu:new()
 main_menu.keybindings = {
     { key = 's', fn = function() main_menu:set_time('start') end },
     { key = 'e', fn = function() main_menu:set_time('end') end },
+    { key = 'ctrl+left', fn = function() main_menu:set_time('start') end },
+    { key = 'ctrl+right', fn = function() main_menu:set_time('end') end },
     { key = 'S', fn = function() main_menu:set_time_sub('start') end },
     { key = 'E', fn = function() main_menu:set_time_sub('end') end },
     { key = 'r', fn = function() main_menu:reset_timings() end },
+    { key = 'ctrl+z', fn = function() main_menu:undo_timings() end },
     { key = 'c', fn = function() encoder.create_clip('video') end },
     { key = 'C', fn = function() force_resolution(1920, -2, encoder.create_clip, 'video') end },
     { key = 'a', fn = function() encoder.create_clip('audio') end },
@@ -302,7 +306,15 @@ main_menu.keybindings = {
 }
 
 function main_menu:set_time(property)
+    self.timingsUndo = Timings:new()
+    self.timingsUndo['start'] = self.timings['start']
+    self.timingsUndo['end'] = self.timings['end']
+    self.timingsUndo[property] = self.timings[property]
     self.timings[property] = mp.get_property_number('time-pos')
+    time = human_readable_time(self.timings['end']-self.timings['start'])
+    if total_time_to_clipbaord and time ~= 'empty' and self.timings['end']-self.timings['start'] ~= 0 then
+        mp.commandv("run", "powershell", "set-clipboard", time);
+    end
     self:update()
 end
 
@@ -320,12 +332,21 @@ function main_menu:set_time_sub(property)
 end
 
 function main_menu:reset_timings()
+    self.timingsUndo = self.timings
     self.timings = Timings:new()
     self:update()
 end
 
+function main_menu:undo_timings()
+    local temp_timings = self.timings
+    self.timings = self.timingsUndo
+    self.timingsUndo = temp_timings
+    self:update()   
+end
+
 main_menu.open = function()
     main_menu.timings = main_menu.timings or Timings:new()
+    main_menu.timingsUndo = main_menu.timingsUndo or Timings:new()
     Menu.open(main_menu)
 end
 
@@ -334,10 +355,12 @@ function main_menu:update()
     osd:bold('Clip creator'):newline()
     osd:tab():bold('Start time: '):append(human_readable_time(self.timings['start'])):newline()
     osd:tab():bold('End time: '):append(human_readable_time(self.timings['end'])):newline()
+    osd:tab():bold('Total time: '):append(human_readable_time(self.timings['end']-self.timings['start'])):newline()
     osd:bold('Timings: '):italics('(+shift use sub timings)'):newline()
-    osd:tab():bold('s: '):append('Set start'):newline()
-    osd:tab():bold('e: '):append('Set end'):newline()
+    osd:tab():bold('s / ctrl+left: '):append('Set start'):newline()
+    osd:tab():bold('e / ctrl+right: '):append('Set end'):newline()
     osd:tab():bold('r: '):append('Reset'):newline()
+    osd:tab():bold('ctrl+z: '):append('Undo'):newline()
     osd:bold('Create clip: '):italics('(+shift to force fullHD preset)'):newline()
     osd:tab():bold('c: '):append('video clip'):newline()
     osd:tab():bold('a: '):append('audio clip'):newline()
