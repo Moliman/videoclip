@@ -59,7 +59,7 @@ local function remove_special_characters(str)
     return str:gsub('[%c%p%s]', '')
 end
 
-local function human_readable_time(seconds)
+local function human_readable_time(seconds, dotSyntax)
     if type(seconds) ~= 'number' or seconds < 0 then
         return 'empty'
     end
@@ -71,10 +71,14 @@ local function human_readable_time(seconds)
     parts.s = math.floor(seconds % 60)
     parts.ms = math.floor((seconds * 1000) % 1000)
 
-    local ret = string.format("%02d:%02d.%03d", parts.m, parts.s, parts.ms)
+    local ret = string.format("%02dm%02ds%03dms", parts.m, parts.s, parts.ms)
 
     if parts.h > 0 then
         ret = string.format('%dh%s', parts.h, ret)
+    end
+
+    if (dotSyntax) then
+        ret:gsub('h', ':'):gsub('m',':'):gsub('s','.'):gsub('ms','')
     end
 
     return ret
@@ -311,7 +315,7 @@ function main_menu:set_time(property)
     self.timingsUndo['end'] = self.timings['end']
     self.timingsUndo[property] = self.timings[property]
     self.timings[property] = mp.get_property_number('time-pos')
-    time = human_readable_time(self.timings['end']-self.timings['start'])
+    time = human_readable_time(self.timings['end']-self.timings['start'], true)
     if total_time_to_clipbaord and time ~= 'empty' and self.timings['end']-self.timings['start'] ~= 0 then
         mp.commandv("run", "powershell", "set-clipboard", time);
     end
